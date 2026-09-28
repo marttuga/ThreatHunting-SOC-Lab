@@ -1,0 +1,42 @@
+{
+  "_comment": "Template de caso para TheHive 5 (corpo InputCaseTemplate da API). Ver README para 2 formas de carregar. Os customFields tem de existir ANTES (Organization > Custom Fields) com estes nomes.",
+
+  "name": "TH-ThreatHunting",
+  "displayName": "Threat Hunting — Cadeia de Ataque (SOC Lab)",
+  "titlePrefix": "TH-",
+  "severity": 2,
+  "tlp": 2,
+  "pap": 2,
+  "tags": ["threat-hunting", "wazuh", "mitre-attack", "soclab"],
+  "description": "Caso gerado automaticamente pelo pipeline Wazuh -> Shuffle -> TheHive.\n\n## Resumo\n- Host afetado:\n- IP de origem:\n- Utilizador:\n- TTP(s) MITRE observado(s):\n- Sinais correlacionados:\n\n## Cadeia de ataque (referência)\nT1204.002 (User Execution) -> T1059.001 (PowerShell) -> T1687 / T1686.003 (Defense Evasion) -> T1021.006 / T1021.004 (Lateral Movement).\n\n## Critério de prioridade\nALTO quando `firewall_change && inbound_connection` na mesma janela de 300s; caso contrário deteção isolada (BAIXO).",
+
+  "tasks": [
+    { "order": 0, "group": "1-triagem",      "title": "Validar o alerta e a correlação", "description": "Confirmar os sinais (firewall_change / inbound_connection) e a janela temporal." },
+    { "order": 1, "group": "1-triagem",      "title": "Identificar host e utilizador afetados", "description": "Confirmar Finance01/Grupo3DC e a conta envolvida." },
+    { "order": 2, "group": "1-triagem",      "title": "Mapear TTP(s) MITRE ATT&CK observado(s)" },
+
+    { "order": 3, "group": "2-investigacao", "title": "Recolher telemetria Sysmon (Event 1 / 3 / 13)", "description": "Criação de processos, ligações de rede e alterações ao registo." },
+    { "order": 4, "group": "2-investigacao", "title": "Analisar linha de comando e argumento -EncodedCommand" },
+    { "order": 5, "group": "2-investigacao", "title": "Reconstruir o movimento lateral (WinRM 5985/5986 ou SSH 22)" },
+
+    { "order": 6, "group": "3-contencao",    "title": "Isolar o host na rede interna VMnet1" },
+    { "order": 7, "group": "3-contencao",    "title": "Repor a firewall do Windows e o Microsoft Defender" },
+    { "order": 8, "group": "3-contencao",    "title": "Revogar sessões e credenciais suspeitas" },
+
+    { "order": 9,  "group": "4-erradicacao", "title": "Remover artefactos e ficheiros maliciosos" },
+    { "order": 10, "group": "4-erradicacao", "title": "Validar a reposição das defesas (Defender / Firewall)" },
+
+    { "order": 11, "group": "5-licoes",      "title": "Documentar achados no relatório do projeto" },
+    { "order": 12, "group": "5-licoes",      "title": "Afinar regras Wazuh / workflow Shuffle (reduzir falsos positivos)" }
+  ],
+
+  "customFields": [
+    { "name": "mitre-ttp",          "order": 0 },
+    { "name": "mitre-tactic",       "order": 1 },
+    { "name": "source-host",        "order": 2 },
+    { "name": "source-ip",          "order": 3 },
+    { "name": "username",           "order": 4 },
+    { "name": "wazuh-rule-id",      "order": 5 },
+    { "name": "correlation-window", "order": 6 }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "type": "$shuffle_node_alert.message.type",
+  "source": "$shuffle_node_alert.message.source",
+  "sourceRef": "$shuffle_node_alert.message.sourceRef",
+  "title": "$shuffle_node_alert.message.title",
+  "description": "$shuffle_node_alert.message.description",
+  "severity": $shuffle_node_alert.message.severity,
+  "tlp": $shuffle_node_alert.message.tlp,
+  "pap": $shuffle_node_alert.message.pap,
+  "flag": $shuffle_node_alert.message.flag,
+  "tags": $shuffle_node_alert.message.tags,
+  "caseTemplate": "$shuffle_node_alert.message.caseTemplate",
+  "status": "$shuffle_node_alert.message.status"
+}
