@@ -1,0 +1,304 @@
+<!-- ============================================================
+  Grupo 3 - ISEP | Threat Hunting com TTPs MITRE ATT&CK
+  Ficheiro : /var/ossec/etc/rules/local_rules.xml
+  Autores  : Sara Bastos, Marta Portugal, Jose Rodrigues
+============================================================
+ 
+  TTPs cobertas (paper IEEE):
+    T1110.001 | Brute Force
+    T1204.002 | User Execution: Malicious File          | Execution
+    T1059.001 | Command and Scripting Interpreter: PS   | Execution
+    T1687     | Exploitation for Defense Impairment      | Defense Evasion
+    T1686.003 | Disable or Modify System Firewall        | Defense Evasion
+    T1021.006 | Remote Services: WinRM                  | Lateral Movement
+    T1021.004 | Remote Services: SSH                    | Lateral Movement
+ 
+  Sysmon Event IDs utilizados:
+    ID  1 = Process Create
+    ID  3 = Network Connection
+    ID 11 = File Create
+ 
+  Convencao da tag "grupo3_prep":
+    Aplicada a regras que cobrem as fases iniciais da kill chain
+    (Execucao e Evasao de Defesas). Estas regras sao a pre-condicao
+    da regra de correlacao 100170: so dispara se, nos 5 minutos
+    anteriores ao movimento lateral, tiver existido pelo menos um
+    evento marcado com esta tag no mesmo host.
+    As regras de Movimento Lateral (100162, 100163, 100165) nao
+    levam a tag - sao o gatilho final da correlacao, nao a preparacao.
+============================================================ -->
+
+<group name="grupo3_isep,mitre_attack,threat_hunting,">
+
+<!-- ============================================================
+   T1110 - 
+============================================================ -->
+<rule id="100131" level="5">
+    <if_sid>60122</if_sid> <field name="win.system.eventID">^4625$</field>
+    <description>GRUPO3 [T1110.001] Tentativa de autenticação falhada no Windows</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>credential_access,authentication_failure,grupo3_prep,</group>
+  </rule>
+
+  <rule id="100132" level="10" frequency="6" timeframe="60">
+    <if_matched_sid>100131</if_matched_sid>
+    <same_source_ip /> <description>GRUPO3 [T1110.001] Ataque de Força Bruta (Brute Force) detetado no host</description>
+    <mitre>
+      <id>T1110</id>
+    </mitre>
+    <group>credential_access,brute_force,active_attack,grupo3_prep,</group>
+  </rule>
+
+<!-- ============================================================
+   T1204.002 - User Execution: Malicious File
+    Tatica: Execution
+    Deteta a execucao de ficheiros maliciosos resultante de interacao do utilizador (phishing, macros droppers).
+    Fontes: Sysmon ID 1 (Process Create), ID 11 (File Create)    
+============================================================ -->
+
+  <rule id="100101" level="8">
+    <if_group>sysmon</if_group>
+    <field name="win.system.eventID">^1$</field>
+    <field name="win.eventdata.image" type="pcre2">(?i)(wscript\.exe|cscript\.exe|mshta\.exe|regsvr32\.exe|rundll32\.exe)</field>
+    <description>GRUPO3 [T1204.002] Execucao de interpretador por interacao do utilizador (ficheiro malicioso)</description>
+    <mitre>
+      <id>T1204.002</id>
+    </mitre>
+    <group>execution,user_execution,suspicious_process,grupo3_prep,</group>
+  </rule>
+
+  <rule id="100102" level="10">
+    <if_group>sysmon</if_group>
+    <field name="win.system.eventID">^1$</field>
+    <field name="win.eventdata.image" type="pcre2">(?i)(cmd\.exe)</field>
+    <field name="win.eventdata.parentImage" type="pcre2">(?i)(explorer\.exe|winword\.exe|excel\.exe|outlook\.exe|acrord32\.exe|chrome\.exe|msedge\.exe|firefox\.exe)</field>
+    <description>GRUPO3 [T1204.002] Linha de comandos (CMD) iniciada por aplicacao de utilizador (Macro/Phishing)</description>
+    <mitre>
+      <id>T1204.002</id>
+    </mitre>
+    <group>execution,user_execution,macro,phishing,grupo3_prep,</group>
+  </rule>
+
+  <rule id="100103" level="8">
+    <if_group>sysmon</if_group>
+    <field name="win.system.eventID">^11$</field>
+    <field name="win.eventdata.targetFilename" type="pcre2">(?i)(\\Users\\Public\\|\\Temp\\|\\AppData\\Local\\Temp\\).*(\.exe|\.bat|\.cmd|\.ps1|\.vbs|\.js|\.hta|\.lnk)$</field>
+    <description>GRUPO3 [T1204.002] Ficheiro malicioso criado em disco resultante de execucao/interacao do utilizador</description>
+    <mitre>
+      <id>T1204.002</id>
+    </mitre>
+    <group>execution,user_execution,file_creation,grupo3_prep,</group>
+  </rule>
+
+<!-- ============================================================
+    T1059.001 - Command and Scripting Interpreter: PowerShell
+    Tatica: Execution
+    Deteta utilizacao abusiva de PowerShell com flags de evasao, padroes de download/execucao em memoria e parent processes suspeitos (Living-off-the-Land).
+    Fonte: Sysmon ID 1 (Process Create)  
+============================================================ -->
+
+  <rule id="100111" level="10">
+    <if_group>sysmon</if_group>
+    <field name="win.system.eventID">^1$</field>
+    <field name="win.eventdata.image" type="pcre2">(?i)powershell(\.exe)?$</field>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(-enc|-encodedcommand|-nop|-noprofile|-bypass|-exec bypass|-windowstyle hidden|-w hidden|-noninteractive)</field>
+    <description>GRUPO3 [T1059.001] PowerShell com flags de evasao detetado</description>
+    <mitre>
+      <id>T1059.001</id>
+    </mitre>
+    <group>powershell,evasion,execution,grupo3_prep,</group>
+  </rule>
+
+  <rule id="100112" level="12">
+    <if_group>sysmon</if_group>
+    <field name="win.system.eventID">^1$</field>
+    <field name="win.eventdata.image" type="pcre2">(?i)powershell(\.exe)?$</field>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(invoke-expression|iex|invoke-mimikatz|downloadstring|frombase64string|net\.webclient|start-bitstransfer|invoke-webrequest)</field>
+    <description>GRUPO3 [T1059.001] ALERTA ALTO - PowerShell com padroes maliciosos detetados</description>
+    <mitre>
+      <id>T1059.001</id>
+    </mitre>
+    <group>powershell,malicious,execution,grupo3_prep,</group>
+  </rule>
+
+  <rule id="100113" level="8">
+    <if_group>sysmon</if_group>
+    <field name="win.system.eventID">^1$</field>
+    <field name="win.eventdata.parentImage" type="pcre2">(?i)(cmd\.exe|wscript\.exe|cscript\.exe|mshta\.exe|regsvr32\.exe|winword\.exe|excel\.exe|outlook\.exe|explorer\.exe|chrome\.exe|msedge\.exe|firefox\.exe)</field>
+    <field name="win.eventdata.image" type="pcre2">(?i)powershell(\.exe)?$</field>
+    <description>GRUPO3 [T1059.001] PowerShell executado por processo suspeito pai</description>
+    <mitre>
+      <id>T1059.001</id>
+    </mitre>
+    <group>powershell,suspicious_parent,execution,grupo3_prep,</group>
+  </rule>
+
+<!-- ============================================================
+    T1687 - Exploitation for Defense Impairment
+    Tatica: Defense Evasion
+    Deteta desativacao ou modificacao do Windows Defender.
+    Fontes: Sysmon ID 1 (commandLine Set-MpPreference),
+            Windows Defender Event ID 5001 (if_sid 62152),
+            Windows Defender Event ID 5013 (if_sid 62154)
+ 
+    T1686.003 - Disable or Modify System Firewall: Windows Host Firewall
+    Tatica: Defense Evasion
+    Deteta modificacao de regras da Firewall do Windows via cmdlets PowerShell ou Script Block Logging (EID 4104).
+    Fontes: Sysmon ID 1 (commandLine Set-NetFirewallProfile),
+            PowerShell/Operational EID 4104 (Script Block) 
+============================================================ -->
+   
+  <rule id="100122" level="13">
+    <if_group>sysmon</if_group>
+    <field name="win.system.eventID">^1$</field>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(Set-MpPreference|Add-MpPreference).*(DisableRealtimeMonitoring|DisableBehaviorMonitoring|ExclusionPath|DisableScriptScanning|DisableIOAVProtection|MpCmdRun)</field>
+    <description>GRUPO3 [T1687] ALERTA CRÍTICO - Windows Defender a ser desativado via PowerShell</description>
+    <mitre>
+      <id>T1687</id>
+    </mitre>
+    <group>defense_evasion,disable_defender,critical,grupo3_prep,</group>
+  </rule>
+ 
+  <rule id="100123" level="12">
+    <if_sid>61600</if_sid>
+	<if_group>sysmon</if_group>
+	<field name="win.system.eventID">^1$</field>
+	<field name="win.eventdata.commandLine" type="pcre2">(?i)(Set-NetFirewallProfile|New-NetFirewallRule|Set-NetFirewallRule)</field>
+	<description>GRUPO3 [T1686.003] Alteração na Firewall Windows</description>
+	<mitre>
+      <id>T1686.003</id>
+	</mitre>
+	<group>defense_impairment,firewall_modification,critical,grupo3_prep,</group>
+  </rule>
+  
+  <rule id="100126" level="12">
+	<if_group>windows</if_group>
+	<field name="win.system.channel" type="pcre2">(?i)PowerShell/Operational</field>
+	<field name="win.system.eventID">^4104$</field>
+	<field name="win.eventdata.scriptBlockText" type="pcre2">(?i)(New-NetFirewallRule|Set-NetFirewallProfile|Set-NetFirewallRule|netsh\s+advfirewall).*(Allow|Enabled\s+True|False|Disable|off)</field>
+	<description>GRUPO3 [T1686.003] Alteracao de Firewall via cmdlet em script PowerShell (Script Block 4104)</description>
+	<mitre>
+      <id>T1686.003</id>
+	</mitre>
+	<group>defense_impairment,firewall_modification,powershell,grupo3_prep,</group>
+  </rule>
+  
+  <rule id="100124" level="10">
+	<if_sid>62153</if_sid>
+	<description>GRUPO3 [T1687] Configuração do Windows Defender Alterada</description>
+	<mitre>
+      <id>T1687</id>
+	</mitre>
+	<group>defense_evasion,disable_defender,grupo3_prep,</group>
+  </rule>
+ 
+ 
+  <rule id="100125" level="12">
+    <if_sid>62152</if_sid>
+    <description>GRUPO3 [T1687] Antivírus Desativado - Proteção em Tempo Real Desligada (Log Nativo)</description>
+    <mitre>
+      <id>T1687</id>
+    </mitre>
+    <group>defense_evasion,disable_defender,critical,grupo3_prep,</group>
+  </rule>
+ 
+  <rule id="100128" level="11">
+    <if_sid>62154</if_sid>
+    <description>GRUPO3 [T1687] Evasion - Exclusão de pasta adicionada ao Windows Defender (C:\Users\Public)</description>
+    <mitre>
+      <id>T1687</id>
+    </mitre>
+    <group>defense_evasion,disable_defender,grupo3_prep,</group>
+  </rule>
+ 
+<!-- ============================================================
+    T1021.006 - Remote Services: Windows Remote Management (WinRM)
+    Tatica: Lateral Movement
+    Deteta configuracao de PSRemoting/WinRM e execucao remota de comandos entre hosts do dominio soclab.
+    Fontes: Sysmon ID 1 (Process Create), ID 3 (Network Connection)
+ 
+    T1021.004 - Remote Services: SSH
+    Tatica: Lateral Movement
+    Deteta preparacao de chaves SSH e conexao SSH vinda do Kali.
+    Fonte: Sysmon ID 1 (Process Create), ID 3 (Network Connection)
+ 
+    NOTA: as regras 100162, 100163 e 100165 nao levam a tag "grupo3_prep" deliberadamente - sao o gatilho final da regra de correlacao 100170 e nao a sua pre-condicao.
+============================================================ -->
+
+  <rule id="100161" level="10">
+    <if_group>sysmon</if_group>
+    <field name="win.system.eventID">^1$</field>
+    <field name="win.eventdata.image" type="pcre2">(?i)(cmd\.exe|powershell\.exe)</field>
+    <field name="win.eventdata.commandLine" type="pcre2">(?i)(Enable-PSRemoting|winrm\s+quickconfig|winrm\s+set|New-NetFirewallRule.*5985)</field>
+    <description>GRUPO3 [T1021.006] Configuração de WinRM/PSRemoting detetada</description>
+    <mitre>
+      <id>T1021.006</id>
+    </mitre>
+    <group>lateral_movement,winrm,remote_services,grupo3_prep,</group>
+  </rule>
+
+  <rule id="100162" level="11">
+    <if_group>sysmon</if_group>
+    <field name="win.system.eventID">^1$</field>
+    <field name="win.eventdata.image" type="pcre2">(?i)wsmprovhost\.exe</field>
+    <description>GRUPO3 [T1021.006] Movimento Lateral - Execução de comandos remotos via WinRM</description>
+    <mitre>
+      <id>T1021.006</id>
+    </mitre>
+    <group>lateral_movement,winrm,remote_execution,</group>
+  </rule>
+ 
+  <rule id="100163" level="11">
+    <if_group>sysmon</if_group>
+    <field name="win.system.eventID">^3$</field> <field name="win.eventdata.destinationPort">^5985$</field> 
+    <field name="win.eventdata.initiated">^false$</field> <description>GRUPO3 [T1021.006] Movimento Lateral - Ligação WinRM estabelecida com sucesso vinda do Kali</description>
+    <mitre>
+    <id>T1021.006</id>
+      </mitre>
+    <group>lateral_movement,winrm,remote_services,</group> 
+  </rule>
+
+  <rule id="100164" level="10">
+    <if_group>sysmon</if_group>
+    <field name="win.system.eventID">^1$</field> <field name="win.eventdata.commandLine" type="pcre2">(?i)icacls.*administrators_authorized_keys</field>
+    <description>GRUPO3 [T1021.004] Preparação - Alteração de permissões no ficheiro de chaves SSH autorizadas</description>
+    <mitre>
+      <id>T1021.004</id>
+    </mitre>
+    <group>lateral_movement,ssh,grupo3_prep,</group>
+  </rule>
+  
+  <rule id="100165" level="12">
+    <if_group>sysmon</if_group>
+    <field name="win.system.eventID">^3$</field> <field name="win.eventdata.destinationPort">^22$</field> <field name="win.eventdata.initiated">^false$</field> <description>GRUPO3 [T1021.004] Movimento Lateral - Conexão SSH estabelecida com sucesso vinda do Kali</description>
+    <mitre>
+      <id>T1021.004</id>
+    </mitre>
+    <group>lateral_movement,ssh,</group>
+  </rule>
+
+<!-- ============================================================
+    REGRA DE CORRELACAO TEMPORAL
+    Deteta a cadeia completa de intrusao num janela de 5 minutos:
+    exige que um evento de Movimento Lateral (100162, 100163 ou 100165) seja precedido de pelo menos um evento com a tag "grupo3_prep" (Execucao ou Evasao) no mesmo host.
+    Nivel 15 (emergencia) - requer resposta imediata.
+============================================================ -->
+
+  <rule id="100170" level="15" timeframe="300">
+    <if_sid>100162,100163,100165</if_sid>
+    <if_matched_group>grupo3_prep</if_matched_group>
+    <description>GRUPO3 [CORRELACAO] ALERTA CRITICO - Cadeia de intrusao confirmada: pos-exploracao precedida de acesso inicial/evasao no mesmo host (5 min)</description>
+    <mitre>
+    <!--  <id>T1204.002</id>
+      <id>T1059.001</id>
+      <id>T1687</id>
+	  <id>T1686.003</id>
+      <id>T1021.004</id>
+	  <id>T1021.006</id> -->
+    </mitre>
+    <group>correlation,active_incident,kill_chain,critical,</group>
+  </rule>
+
+</group>

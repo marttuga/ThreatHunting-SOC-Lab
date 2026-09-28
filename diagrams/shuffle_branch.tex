@@ -1,0 +1,83 @@
+\begin{figure}[!ht]
+\centering
+\begin{tikzpicture}[
+  font=\small,
+  >=Stealth,
+  webhook/.style={
+    draw, rounded corners=4pt,
+    fill=gray!15, text=black,
+    minimum width=4.6cm, minimum height=0.9cm,
+    align=center, font=\small\bfseries
+  },
+  bluenode/.style={
+    draw=blue!50!black, rounded corners=4pt,
+    fill=blue!10, text=blue!60!black,
+    minimum width=5.4cm, minimum height=1.1cm,
+    align=center, font=\small\bfseries
+  },
+  hivenode/.style={
+    draw=green!50!black, rounded corners=4pt,
+    fill=green!10, text=green!40!black,
+    minimum width=3.4cm, minimum height=0.95cm,
+    align=center, font=\small\bfseries
+  },
+  notifnode/.style={
+    draw=orange!70!black, rounded corners=4pt,
+    fill=orange!15, text=orange!60!black,
+    minimum width=3.4cm, minimum height=0.95cm,
+    align=center, font=\small\bfseries
+  },
+  emailnode/.style={
+    draw=orange!70!black, rounded corners=4pt,
+    fill=orange!8, text=orange!60!black,
+    minimum width=3.4cm, minimum height=0.95cm,
+    align=center, font=\small\bfseries
+  },
+  legendbox/.style={
+    draw=gray!60, rounded corners=4pt,
+    fill=gray!5, text=black,
+    align=left, font=\footnotesize,
+    inner sep=6pt
+  }
+]
+
+\node[webhook] (wh) at (0, 0)
+  {\textbf{Receive Wazuh Alert} \\ {\footnotesize webhook $\cdot$ grupo3\_isep}};
+
+\node[bluenode] (proc) [below=0.8cm of wh]
+  {\textbf{Shuffle node alert} \\
+   {\footnotesize normaliza $\cdot$ decide (incidente vs.\ dete\c{c}\~{a}o)} \\
+   {\footnotesize monta o \emph{payload} do TheHive}};
+
+\node[hivenode]  (hive)  [below left=1.4cm and 0.4cm of proc]
+  {\textbf{TheHive} \\ {\footnotesize criar alerta (sempre)}};
+
+\node[notifnode] (notif) [below right=1.4cm and 0.4cm of proc]
+  {\textbf{Notification} \\ {\footnotesize monta subject/body}};
+
+\node[emailnode] (mail)  [below=0.8cm of notif]
+  {\textbf{Email} \\ {\footnotesize alerta ao analista}};
+
+\draw[->] (wh)   -- (proc);
+\draw[->] (proc) -- node[above left=-1pt, font=\scriptsize, text=green!40!black]
+  {sempre} (hive);
+\draw[->] (proc) -- node[above right=-1pt, font=\scriptsize, text=orange!70!black]
+  {sempre} (notif);
+\draw[->] (notif) -- (mail);
+
+\node[legendbox, below=1.0cm of mail, xshift=-2.4cm, text width=9.4cm] {
+  \textbf{Aresta $\to$ TheHive:} sem condi\c{c}\~{a}o (corre sempre);
+  cria um \emph{alerta} via \texttt{POST /api/v1/alert}.\\[2pt]
+  \textbf{Aresta $\to$ Notification:} sem condi\c{c}\~{a}o (corre sempre).\\[2pt]
+  \textbf{Severidade:} incidente $=$ cadeia correlacionada (regra~100170,
+  n\'{\i}vel~15) $\to$ 4 (Cr\'{\i}tica); dete\c{c}\~{o}es isoladas $\to$ 1--3
+  conforme o n\'{\i}vel Wazuh.
+};
+\end{tikzpicture}
+\caption{Shuffle workflow --- rece\c{c}\~{a}o, normaliza\c{c}\~{a}o/decis\~{a}o e resposta.
+  O n\'{o} \texttt{Shuffle node alert} normaliza o alerta Wazuh, classifica-o
+  (incidente vs.\ dete\c{c}\~{a}o) e monta o \emph{payload}; alimenta sempre o
+  TheHive (cria\c{c}\~{a}o de alerta) e o n\'{o} \texttt{Notification}, que monta o
+  \emph{subject}/\emph{body} do email enviado ao analista.}
+\label{fig:shuffle_branch}
+\end{figure}
